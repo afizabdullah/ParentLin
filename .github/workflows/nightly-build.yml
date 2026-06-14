@@ -1,54 +1,49 @@
-name: 🌙 Nightly Build
+# .github/workflows/fix-build.yml
+name: Fix APK Build
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # كل يوم منتصف الليل
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  nightly:
-    name: 🌙 Nightly APK Build
+  build:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: 📥 Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: ☕ Setup JDK
+
+      - name: Setup JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      
-      - name: 🤖 Setup Android SDK
+
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-      
-      - name: 🔓 Grant permission
+
+      - name: Fix gradlew permissions
         run: chmod +x gradlew
-      
-      - name: 🏗️ Build Debug APK
-        run: ./gradlew assembleDebug
-      
-      - name: 📊 Get build stats
-        id: stats
+
+      - name: Clean project
+        run: ./gradlew clean
+
+      - name: Build APK with debug info
         run: |
-          echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-          echo "size=$(ls -lh app/build/outputs/apk/debug/*.apk | awk '{print $5}')" >> $GITHUB_OUTPUT
-      
-      - name: 📤 Upload Nightly Build
+          ./gradlew assembleDebug --stacktrace --info
+          
+      - name: List all files to find APK
+        run: |
+          echo "=== البحث عن أي ملف APK ==="
+          find . -name "*.apk" 2>/dev/null || echo "لا يوجد APK"
+          echo "=== هيكل مجلد outputs ==="
+          ls -la app/build/outputs/ || echo "مجلد outputs غير موجود"
+          ls -la app/build/outputs/apk/ || echo "مجلد apk غير موجود"
+          ls -la app/build/outputs/apk/debug/ || echo "مجلد debug غير موجود"
+
+      - name: Upload anything found
         uses: actions/upload-artifact@v4
         with:
-          name: ParentLink-Nightly-${{ steps.stats.outputs.date }}
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-      
-      - name: 📨 Send nightly report
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
-          message: |
-            🌙 بناء ليلي لـ ParentLink
-            📅 التاريخ: ${{ steps.stats.outputs.date }}
-            📦 الحجم: ${{ steps.stats.outputs.size }}
-            ✅ الحالة: ناجح
+          name: any-apk-found
+          path: "**/*.apk"
