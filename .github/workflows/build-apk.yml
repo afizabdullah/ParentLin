@@ -1,0 +1,132 @@
+name: 🔨 Build ParentLink APK
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'نوع البناء'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+env:
+  JAVA_VERSION: '17'
+  GRADLE_VERSION: '8.2'
+  ANDROID_COMPILE_SDK: '34'
+
+jobs:
+  build:
+    name: 🏗️ Building APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. تحميل الكود
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      # 2. إعداد Java
+      - name: ☕ Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+      
+      # 3. إعداد Android SDK
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            build-tools;34.0.0
+            platforms;android-34
+            extras;google;m2repository
+            extras;android;m2repository
+      
+      # 4. إعداد Gradle Wrapper
+      - name: 🔧 Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+      
+      # 5. منح صلاحيات التنفيذ
+      - name: 🔓 Grant execute permission
+        run: chmod +x gradlew
+      
+      # 6. التحقق من صحة الكود
+      - name: ✅ Lint check
+        run: ./gradlew lint
+      
+      # 7. تشغيل الاختبارات
+      - name: 🧪 Run tests
+        run: ./gradlew test
+      
+      # 8. بناء APK حسب النوع
+      - name: 🏗️ Build APK
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" == "release" ] || [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
+      
+      # 9. توقيع APK للإصدار (اختياري)
+      - name: ✍️ Sign Release APK
+        if: github.event.inputs.build_type == 'release' || github.ref == 'refs/heads/main'
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        continue-on-error: true
+      
+      # 10. رفع APK كملف مؤقت
+      - name: 📤 Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParentLink-Debug-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+      
+      - name: 📤 Upload Release APK
+        if: github.event.inputs.build_type == 'release' || github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParentLink-Release-${{ github.run_number }}
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 90
+      
+      # 11. إرسال إشعار إلى تليجرام (اختياري)
+      - name: 📨 Send Telegram notification
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            ✅ بناء ParentLink ناجح!
+            📦 نوع: ${{ github.event.inputs.build_type }}
+            🔢 رقم البناء: ${{ github.run_number }}
+            📁 تحميل: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      
+      # 12. إرسال إشعار بالفشل
+      - name: 📨 Send failure notification
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            ❌ فشل بناء ParentLink!
+            🔢 رقم البناء: ${{ github.run_number }}
+            📝 الرجاء مراجعة الأخطاء
