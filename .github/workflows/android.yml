@@ -17,8 +17,8 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Grant execute permission to all files
+      run: chmod -R 755 .
 
     - name: Build with Gradle
       run: ./gradlew assembleDebug
@@ -27,5 +27,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
-        # هذا المسار يبحث عن أي ملف ينتهي بـ apk داخل مجلد المخرجات
         path: app/build/outputs/apk/**/*.apk
