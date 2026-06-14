@@ -1,0 +1,81 @@
+name: 🚀 Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'إصدار التطبيق'
+        required: true
+        default: '1.0.0'
+      changelog:
+        description: 'ما الجديد؟'
+        required: false
+
+jobs:
+  release:
+    name: 📦 Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+      
+      - name: ☕ Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: 🔓 Grant permission
+        run: chmod +x gradlew
+      
+      - name: 🏗️ Build Release APK
+        run: ./gradlew assembleRelease
+      
+      - name: ✍️ Sign APK
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+      
+      - name: 📝 Prepare release notes
+        run: |
+          echo "# ParentLink v${{ github.event.inputs.version || github.ref_name }}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 🆕 ما الجديد؟" >> RELEASE_NOTES.md
+          echo "${{ github.event.inputs.changelog || 'إصدار جديد من ParentLink' }}" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 📦 التحميل" >> RELEASE_NOTES.md
+          echo "- [تحميل APK](${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/ParentLink-${{ github.ref_name }}.apk)" >> RELEASE_NOTES.md
+      
+      - name: 🚀 Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "ParentLink ${{ github.ref_name }}"
+          body_path: RELEASE_NOTES.md
+          files: |
+            app/build/outputs/apk/release/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 📨 Send release notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            🎉 إصدار جديد لـ ParentLink!
+            📌 الإصدار: ${{ github.ref_name }}
+            📥 تحميل: https://github.com/${{ github.repository }}/releases/latest
