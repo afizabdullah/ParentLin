@@ -7,6 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,13 +18,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Make Gradlew Executable
-        run: chmod +x gradlew
+      - name: Fix Permissions Recursively
+        run: |
+          find . -type d -exec chmod 755 {} \;
+          find . -type f -exec chmod 644 {} \;
+          chmod +x gradlew
+          chmod +x gradle/wrapper/gradle-wrapper.jar
 
       - name: Build APK
         run: ./gradlew assembleDebug
 
-      - name: Locate and Upload APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
